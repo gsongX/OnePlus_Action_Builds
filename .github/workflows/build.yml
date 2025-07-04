@@ -39,6 +39,7 @@ jobs:
 
     steps:
       - name: Setup Build System
+        shell: bash
         run: |
           export DEBIAN_FRONTEND=noninteractive
           echo "DEBIAN_FRONTEND=noninteractive" >> $GITHUB_ENV
@@ -85,6 +86,7 @@ jobs:
           echo "CONFIG=${{ inputs.model }}" >> $GITHUB_ENV
 
       - name: Clone AnyKernel3 and Other Dependencies
+        shell: bash
         run: |
           echo "Cloning AnyKernel3 and other dependencies..."
           
@@ -105,6 +107,7 @@ jobs:
           git clone https://github.com/TheWildJames/kernel_patches.git
 
       - name: Initialize and Sync Kernel Source
+        shell: bash
         run: |
           echo "Creating folder for configuration: $CONFIG..."
           mkdir -p "$CONFIG"
@@ -119,6 +122,7 @@ jobs:
           $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast
       
       - name: Add KernelSU Next
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -132,6 +136,7 @@ jobs:
           fi
 
       - name: Apply SUSFS Patches
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -149,7 +154,7 @@ jobs:
           susfs_version=$(grep '#define SUSFS_VERSION' ../common/include/linux/susfs.h | awk -F'"' '{print $2}')
           echo "SUSVER=$susfs_version" >> $GITHUB_ENV
           BASE_VERSION=10200
-          KSU_VERSION=$(expr $(curl -sI -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=${{ inputs.ksun_branch }}&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" $BASE_VERSION)
+          KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=${{ inputs.ksun_branch }}&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" $BASE_VERSION)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           echo "KernelSU Next Version: $KSU_VERSION"
           echo "SusFS Version: $susfs_version"
@@ -191,12 +196,26 @@ jobs:
           
           if [ "$(printf '%s\n' "$KERNEL_VERSION" "$MIN_VERSION" | sort -V | head -n1)" = "$KERNEL_VERSION" ]; then
             echo "Patching ptrace!"
-            curl -Ls https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/ptrace.patch  | patch -p1 -F 3
+            curl -Ls https://raw.githubusercontent.com/WildKernels/kernel_patches/refs/heads/main/gki_ptrace.patch  | patch -p1 -F 3
           else
             echo "Kernel >= $MIN_VERSION, skipping ptrace patch"
           fi
+          
+          if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13" ]; then
+            echo "Patching hmdird!"
+            echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
+            curl -Ls https://raw.githubusercontent.com/Numbersf/Action-Build/refs/heads/SukiSU-Ultra/patches/hmbird_patch.patch | patch -p1 -F 3 --verbose
+            echo "Patching hmbird files!"
+            # curl -Ls https://github.com/schqiushui/android_kernel_common_oneplus_sm8750/commit/5d2cc9706a35f5e4b5dbbd5d247487225a46e02c.patch | patch -p1 -F 3
+            cd ./kernel/sched
+            rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c
+            curl -Ls https://github.com/HanKuCha/sched_ext/commit/7ab1d04d5cb622d6c32c932add617803074ec5a7.patch | patch -p1 -F 3
+          else
+            echo "Not OPAce5Pro / OP13, skipping fengchi patch"
+          fi
 
       - name: Apply KSUN Hooks
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform/common"
@@ -205,6 +224,7 @@ jobs:
           patch -p1 --fuzz=3 < ./manual_hooks.patch
           
       - name: Apply Hide Stuff Patches
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform/common"
@@ -213,6 +233,7 @@ jobs:
           patch -p1 -F 3 < 69_hide_stuff.patch
 
       - name: Add KernelSU-Next and SUSFS Configuration Settings
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -221,6 +242,7 @@ jobs:
           
           # Add KSU configuration settings
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_WITH_KPROBES=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_KPROBES_HOOK=n" >> ./common/arch/arm64/configs/gki_defconfig
           
           # Add SUSFS configuration settings
@@ -245,7 +267,8 @@ jobs:
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
-      - name: Add BBR Support
+      - name: Add BBR Support and Others Configuration
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -253,24 +276,103 @@ jobs:
           echo "Adding configuration settings to gki_defconfig..."
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_BIC=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_WESTWOOD=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_BIC=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_WESTWOOD=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_HTCP=y" >> ./common/arch/arm64/configs/gki_defconfig
           
           echo "CONFIG_NET_SCH_FQ=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_NET_SCH_FQ_CODEL=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IPV6_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_NF_TARGET_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # 精简内核体积
+          echo "CONFIG_DEBUG_KERNEL=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DYNAMIC_DEBUG=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_INFO=n" >> ./common/arch/arm64/configs/gki_defconfig  
+          
+          if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13" ]; then
+            echo "CONFIG_RETPOLINE=n" >> ./common/arch/arm64/configs/gki_defconfig  # 骁龙8 Gen3无需此防护
+            echo "CONFIG_SLUB_CACHELINE_AWARE=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_QCOM_SLUB_DSP_ACCEL=y" >> ./common/arch/arm64/configs/gki_defconfig
+            
+          fi
+
+          # 恢复调试信息（BTF必需）
+          sed -i 's/CONFIG_DEBUG_INFO=n/CONFIG_DEBUG_INFO=y/' ./common/arch/arm64/configs/gki_defconfig
+
+          # 启用BTF专用配置
+          # **注意**：Android GKI要求从内核5.10开始必须启用BTF，否则无法通过VTS测试。
+          echo "CONFIG_DEBUG_INFO_BTF=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_INFO_REDUCED=n" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # Add zram config setting
+          if [ "${{ inputs.kernel_version }}" != "5.10" ]; then
+            echo "CONFIG_ZRAM_DEF_COMP_LZORLE=n" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_ZRAM_DEF_COMP_LZO=n" >> ./common/arch/arm64/configs/gki_defconfig
+            # 1. 禁用 ZSTD 压缩算法支持
+            echo "CONFIG_CRYPTO_ZSTD=n" >> ./common/arch/arm64/configs/gki_defconfig
+            # 2. 从 ZRAM 可用算法列表中移除 ZSTD
+            echo "CONFIG_ZRAM_DEF_COMP_ZSTD=n" >> ./common/arch/arm64/configs/gki_defconfig
+            # 3. 禁用 ZSTD 相关子选项
+            echo "CONFIG_ZSTD_COMPRESS=n" >> ./common/arch/arm64/configs/gki_defconfig
+            echo "CONFIG_ZSTD_DECOMPRESS=n" >> ./common/arch/arm64/configs/gki_defconfig
+
+            echo "CONFIG_ZRAM_DEF_COMP_LZ4=y" >> ./common/arch/arm64/configs/gki_defconfig
+            echo 'CONFIG_ZRAM_DEF_COMP="lz4"' >> ./common/arch/arm64/configs/gki_defconfig
+          fi
+
+          # Add rcu config setting
+          echo "CONFIG_RCU_TRACE=n" >> ./common/arch/arm64/configs/gki_defconfig
+
+      - name: Force ECN + Reduce overhead
+        shell: bash
+        if: ${{ inputs.kernel_version == '6.6' || inputs.kernel_version == '6.1' }}
+        run: |
+          cd "$CONFIG/kernel_platform/common/net/ipv4"
+          sed -i 's/net->ipv4.sysctl_tcp_ecn = 2;/net->ipv4.sysctl_tcp_ecn = 1;/' tcp_ipv4.c
+          grep "sysctl_tcp_ecn" tcp_ipv4.c
+          #sed -i '/\.procname[[:space:]]*=[[:space:]]*"tcp_ecn"/, /^[[:space:]]*\}/ s/SYSCTL_TWO/SYSCTL_ONE/' sysctl_net_ipv4.c
+          grep -A6 '\.procname.*tcp_ecn' sysctl_net_ipv4.c
+          sed -i 's/net->ipv4.sysctl_tcp_pacing_ss_ratio = 200;/net->ipv4.sysctl_tcp_pacing_ss_ratio = 150;/' tcp_ipv4.c
+          sed -i 's/net->ipv4.sysctl_tcp_pacing_ca_ratio = 120;/net->ipv4.sysctl_tcp_pacing_ca_ratio = 110;/' tcp_ipv4.c
+          grep "sysctl_tcp_pacing" tcp_ipv4.c
+          ls -t | grep -E 'tcp_|sysctl_'
 
       - name: Add TTL Target Support
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
-          
+
           echo "Adding configuration settings to gki_defconfig..."
           echo "CONFIG_IP_NF_TARGET_TTL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
+      # - name: Disable OnePlus Kernel Module
+      #   shell: bash
+      #   run: |
+      #     echo "Changing to configuration directory: $CONFIG..."
+      #     cd "$CONFIG/kernel_platform"
+      #     if [ "${{ inputs.android_version }}" = "android15" ] && [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+      #       sed -i 's/CONFIG_KUNIT=m/CONFIG_KUNIT=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_REGMAP_KUNIT=m/CONFIG_REGMAP_KUNIT=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_INPUT_KUNIT_TEST=m/CONFIG_INPUT_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_SND_SOC_TOPOLOGY_KUNIT_TEST=m/CONFIG_SND_SOC_TOPOLOGY_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_SND_SOC_UTILS_KUNIT_TEST=m/CONFIG_SND_SOC_UTILS_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_HID_KUNIT_TEST=m/CONFIG_HID_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_RTC_LIB_KUNIT_TEST=m/CONFIG_RTC_LIB_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_CLK_KUNIT_TEST=m/CONFIG_CLK_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_CLK_GATE_KUNIT_TEST=m/CONFIG_CLK_GATE_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_IIO_FORMAT_KUNIT_TEST=m/CONFIG_IIO_FORMAT_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_EXT4_KUNIT_TESTS=m/CONFIG_EXT4_KUNIT_TESTS=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_FAT_KUNIT_TEST=m/CONFIG_FAT_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #     fi
+      
       - name: Run sed and perl Commands
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
@@ -280,17 +382,21 @@ jobs:
           sed -i 's/CONFIG_LTO=n/CONFIG_LTO=y/' "./common/arch/arm64/configs/gki_defconfig"
           sed -i 's/CONFIG_LTO_CLANG_FULL=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
           sed -i 's/CONFIG_LTO_CLANG_NONE=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
+
+
+          echo " ⚡️ 显示 gki_defconfig 配置文件"
+          cat "./common/arch/arm64/configs/gki_defconfig"
           
           # Run sed commands for modifications
           sed -i 's/check_defconfig//' ./common/build.config.gki
           # For Old setlocalversion Script
-          tac ./common/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-OP-Wild\;echo "\$res"\;/' | tac > ./common/scripts/setlocalversion.tmp && mv ./common/scripts/setlocalversion.tmp ./common/scripts/setlocalversion
-          tac ./msm-kernel/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-OP-Wild\;echo "\$res"\;/' | tac > ./msm-kernel/scripts/setlocalversion.tmp && mv ./msm-kernel/scripts/setlocalversion.tmp ./msm-kernel/scripts/setlocalversion
-          tac ./external/dtc/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-OP-Wild\;echo "\$res"\;/' | tac > ./external/dtc/scripts/setlocalversion.tmp && mv ./external/dtc/scripts/setlocalversion.tmp ./external/dtc/scripts/setlocalversion
+          tac ./common/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./common/scripts/setlocalversion.tmp && mv ./common/scripts/setlocalversion.tmp ./common/scripts/setlocalversion
+          tac ./msm-kernel/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./msm-kernel/scripts/setlocalversion.tmp && mv ./msm-kernel/scripts/setlocalversion.tmp ./msm-kernel/scripts/setlocalversion
+          tac ./external/dtc/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./external/dtc/scripts/setlocalversion.tmp && mv ./external/dtc/scripts/setlocalversion.tmp ./external/dtc/scripts/setlocalversion
           # For New setlocalversion Script
-          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-OP-Wild"/' ./common/scripts/setlocalversion
-          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-OP-Wild"/' ./msm-kernel/scripts/setlocalversion
-          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-OP-Wild"/' ./external/dtc/scripts/setlocalversion
+          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-gs0ng"/' ./common/scripts/setlocalversion
+          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-gs0ng"/' ./msm-kernel/scripts/setlocalversion
+          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-gs0ng"/' ./external/dtc/scripts/setlocalversion
           chmod +x ./common/scripts/setlocalversion
           chmod +x ./msm-kernel/scripts/setlocalversion
           chmod +x ./external/dtc/scripts/setlocalversion
@@ -309,6 +415,7 @@ jobs:
           perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="#1 SMP PREEMPT $DATESTR"}' ./msm-kernel/scripts/mkcompile_h
 
       - name: Build the Kernel
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -350,6 +457,7 @@ jobs:
           fi
 
       - name: Create ZIP Files for Different Formats
+        shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"

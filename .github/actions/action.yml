@@ -26,9 +26,14 @@ inputs:
   ksun_branch:
     required: true
     type: string
-    default: stable
+    default: "next"
   susfs_branch:
     required: true
+    type: string
+    default: ""
+    description: "SUSFS branch"
+  power_saving_config:
+    required: false
     type: string
     default: ""
 
@@ -72,7 +77,7 @@ runs:
           # Install dependencies
           echo "Installing Repo and Python"
           sudo apt update
-          sudo apt install -y python3 python-is-python3
+          sudo apt install -y python3 python-is-python3 git curl
           
           mkdir -p ./git-repo
           curl -sSL https://storage.googleapis.com/git-repo-downloads/repo > ./git-repo/repo
@@ -124,7 +129,7 @@ runs:
           
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
-          $REPO init -u https://github.com/OnePlusOSS/kernel_manifest.git -b ${{ inputs.branch }} -m ${{ inputs.manifest }} --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
+          $REPO init -u https://github.com/gsongX/kernel_manifest.git -b ${{ inputs.branch }} -m ${{ inputs.manifest }} --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
           
           # Sync repo and apply patches
           $REPO --version
@@ -203,6 +208,12 @@ runs:
           fi
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           
+          if ! grep -qxF '#define CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS 0x55561' ./include/linux/susfs_def.h; then
+              curl -Ls https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/hide_sus_mnts_for_all_procs.patch  | patch -p1 -F 3
+          else
+              echo "Line already present. Skipping SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS Patch."
+          fi
+          
           KERNEL_VERSION="${{ inputs.kernel_version }}"
           MIN_VERSION="5.16"
           
@@ -213,13 +224,16 @@ runs:
             echo "Kernel >= $MIN_VERSION, skipping ptrace patch"
           fi
           
+          #已经https://github.com/gsongX/android_kernel_common_oneplus_sm8750/tree/oneplus/sm8750_v_15.0.0_oneplus_13 hmbird 补丁了，这个就不用了，先测试一下
+          #sm8750_v_15.0.0_oneplus_13 有了hmbird_files_patch.patch补丁
+          #sm8750_v_15.0.0_oneplus_ace5_pro 还没有hmbird_files_patch.patch补丁
           if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13" ]; then
             echo "Patching hmbird!"
             echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
             patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird_kernel_patch.patch"
             echo "Patching hmbird files!"
             cd ./kernel/sched
-            rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c
+            rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c hmbird_sched_proc.h hmbird_sched_proc_main.c
             patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/hmbird_files_patch.patch"
           else
             echo "Not OPAce5Pro / OP13 , skipping fengchi patch"
@@ -253,6 +267,7 @@ runs:
           
           # Add KSU configuration settings
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_WITH_KPROBES=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_KPROBES_HOOK=n" >> ./common/arch/arm64/configs/gki_defconfig
           
           # Add SUSFS configuration settings
@@ -277,13 +292,14 @@ runs:
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TMPFS_POSIX_ACL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
-      - name: Add BBR Support
+      - name: Add BBR Support and Others Configuration
         shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
           
           echo "Adding configuration settings to gki_defconfig..."
+          # ===== 网络优化 =====
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BBR=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BIC=n" >> ./common/arch/arm64/configs/gki_defconfig
@@ -292,18 +308,80 @@ runs:
           
           echo "CONFIG_NET_SCH_FQ=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_NET_SCH_FQ_CODEL=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IPV6_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_IP_NF_TARGET_ECN=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # ===== 日志优化 =====
+          # 减少内核日志输出
+          echo "CONFIG_PRINTK_SAFE_LOG_BUF_SHIFT=12" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DYNAMIC_DEBUG=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_KERNEL=n" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # Lazy RCU优化
+          echo "CONFIG_RCU_LAZY=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # ===== 编译优化 =====
+          # 启用LTO和优化选项
+          echo "CONFIG_LTO_CLANG=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_LTO_CLANG_THIN=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_CC_DISABLE_WARN_MAYBE_UNINITIALIZED=y" >> ./common/arch/arm64/configs/gki_defconfig
+          # echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+          # ===== F2FS优化 =====
+          # 防止ROOT后性能下降
+          echo "CONFIG_F2FS_UNFAIR_RWSEM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_F2FS_FS_DISABLE_TURBO_WRITE=y" >> ./common/arch/arm64/configs/gki_defconfig
+
+      - name: Force ECN + Reduce overhead
+        shell: bash
+        if: ${{ inputs.kernel_version == '6.6' || inputs.kernel_version == '6.1' }}
+        run: |
+          cd "$CONFIG/kernel_platform/common/net/ipv4"
+          sed -i 's/net->ipv4.sysctl_tcp_ecn = 2;/net->ipv4.sysctl_tcp_ecn = 1;/' tcp_ipv4.c
+          grep "sysctl_tcp_ecn" tcp_ipv4.c
+          #sed -i '/\.procname[[:space:]]*=[[:space:]]*"tcp_ecn"/, /^[[:space:]]*\}/ s/SYSCTL_TWO/SYSCTL_ONE/' sysctl_net_ipv4.c
+          grep -A6 '\.procname.*tcp_ecn' sysctl_net_ipv4.c
+          sed -i 's/net->ipv4.sysctl_tcp_pacing_ss_ratio = 200;/net->ipv4.sysctl_tcp_pacing_ss_ratio = 150;/' tcp_ipv4.c
+          sed -i 's/net->ipv4.sysctl_tcp_pacing_ca_ratio = 120;/net->ipv4.sysctl_tcp_pacing_ca_ratio = 110;/' tcp_ipv4.c
+          grep "sysctl_tcp_pacing" tcp_ipv4.c
+          ls -t | grep -E 'tcp_|sysctl_'
 
       - name: Add TTL Target Support
         shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/kernel_platform"
-          
+
           echo "Adding configuration settings to gki_defconfig..."
           echo "CONFIG_IP_NF_TARGET_TTL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
 
+      # - name: Disable OnePlus Kernel Module
+      #   shell: bash
+      #   run: |
+      #     echo "Changing to configuration directory: $CONFIG..."
+      #     cd "$CONFIG/kernel_platform"
+      #     if [ "${{ inputs.android_version }}" = "android15" ] && [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+      #       sed -i 's/CONFIG_TIME_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_REGMAP_KUNIT=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_INPUT_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_SND_SOC_TOPOLOGY_KUNIT_TEST=m/CONFIG_SND_SOC_TOPOLOGY_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_SND_SOC_UTILS_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_HID_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_RTC_LIB_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_CLK_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_CLK_GATE_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_IIO_FORMAT_KUNIT_TEST=m/C/g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_EXT4_KUNIT_TESTS=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_FAT_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #       sed -i 's/CONFIG_KUNIT_EXAMPLE_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
+      #     fi
+      
       - name: Run sed and perl Commands
         shell: bash
         run: |
@@ -315,17 +393,21 @@ runs:
           sed -i 's/CONFIG_LTO=n/CONFIG_LTO=y/' "./common/arch/arm64/configs/gki_defconfig"
           sed -i 's/CONFIG_LTO_CLANG_FULL=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
           sed -i 's/CONFIG_LTO_CLANG_NONE=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
+
+
+          echo " ⚡️ 显示 gki_defconfig 配置文件"
+          cat "./common/arch/arm64/configs/gki_defconfig"
           
           # Run sed commands for modifications
           sed -i 's/check_defconfig//' ./common/build.config.gki
           # For Old setlocalversion Script
-          tac ./common/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-OP-Wild\;echo "\$res"\;/' | tac > ./common/scripts/setlocalversion.tmp && mv ./common/scripts/setlocalversion.tmp ./common/scripts/setlocalversion
-          tac ./msm-kernel/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-OP-Wild\;echo "\$res"\;/' | tac > ./msm-kernel/scripts/setlocalversion.tmp && mv ./msm-kernel/scripts/setlocalversion.tmp ./msm-kernel/scripts/setlocalversion
-          tac ./external/dtc/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-OP-Wild\;echo "\$res"\;/' | tac > ./external/dtc/scripts/setlocalversion.tmp && mv ./external/dtc/scripts/setlocalversion.tmp ./external/dtc/scripts/setlocalversion
+          tac ./common/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./common/scripts/setlocalversion.tmp && mv ./common/scripts/setlocalversion.tmp ./common/scripts/setlocalversion
+          tac ./msm-kernel/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./msm-kernel/scripts/setlocalversion.tmp && mv ./msm-kernel/scripts/setlocalversion.tmp ./msm-kernel/scripts/setlocalversion
+          tac ./external/dtc/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./external/dtc/scripts/setlocalversion.tmp && mv ./external/dtc/scripts/setlocalversion.tmp ./external/dtc/scripts/setlocalversion
           # For New setlocalversion Script
-          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-OP-Wild"/' ./common/scripts/setlocalversion
-          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-OP-Wild"/' ./msm-kernel/scripts/setlocalversion
-          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-OP-Wild"/' ./external/dtc/scripts/setlocalversion
+          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-gs0ng"/' ./common/scripts/setlocalversion
+          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-gs0ng"/' ./msm-kernel/scripts/setlocalversion
+          sed -i 's/echo "${KERNELVERSION}${file_localversion}${config_localversion}${LOCALVERSION}${scm_version}"/echo "${KERNELVERSION}-${{ inputs.android_version }}-gs0ng"/' ./external/dtc/scripts/setlocalversion
           chmod +x ./common/scripts/setlocalversion
           chmod +x ./msm-kernel/scripts/setlocalversion
           chmod +x ./external/dtc/scripts/setlocalversion
@@ -397,11 +479,13 @@ runs:
           echo "Navigating to AnyKernel3 directory..."
           cd ../AnyKernel3
           
-           if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13" ]; then
+          #不修复，不管国行版还是海外版，不打补丁，刚刷ak3是循环重启的，如果进入系统后再刷回官方dtbo.img 是可以进入系统的
+          if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13" ]; then
             cp ../kernel_patches/oneplus/hmbird/bins/* ./tools/
             patch -F 3 < ../kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch
           fi
-          
+
+          # 创建 AnyKernel3 ZIP 文件
           # Zip the files in the AnyKernel3 directory with a new naming convention
           ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}_Next_${{ env.KSUVER }}_SUSFS_${{ env.SUSVER }}.zip"
           echo "Creating zip file $ZIP_NAME..."
@@ -410,6 +494,6 @@ runs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ env.CONFIG }}
+          name: kernel-${{ env.CONFIG }} # 例如：kernel-OP13
           path: |
             *.zip

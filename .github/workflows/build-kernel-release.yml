@@ -44,6 +44,11 @@ on:
         description: "Choose SusFS Branch for android15-6.6"
         type: string
         default: "gki-android15-6.6"
+      enable_power_savings:
+        description: "Enable power saving optimizations (reduces performance by ~50%)"
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   build-batch-1: # Non Bazel Builds
@@ -52,55 +57,61 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - model: OP11
-            soc: kalama
-            branch: oneplus/sm8550
-            manifest: oneplus_11_v.xml
-            android_version: android13
-            kernel_version: "5.15"
-          - model: OP11r
-            soc: waipio
-            branch: oneplus/sm8475
-            manifest: oneplus_11r_v.xml
-            android_version: android12
-            kernel_version: "5.10"
-          - model: OP-OPEN
-            soc: kalama
-            branch: oneplus/sm8550
-            manifest: oneplus_open_v.xml
-            android_version: android13
-            kernel_version: "5.15"
-          - model: OP-ACE-2
-            soc: waipio
-            branch: oneplus/sm8475
-            manifest: oneplus_ace2_v.xml
-            android_version: android12
-            kernel_version: "5.10"
-          - model: OP10t
-            soc: waipio
-            branch: oneplus/sm8475
-            manifest: oneplus_10t_v.xml
-            android_version: android12
-            kernel_version: "5.10"
-          - model: OP10pro
-            soc: waipio
-            branch: oneplus/sm8450
-            manifest: oneplus_10_pro_v.xml
-            android_version: android12
-            kernel_version: "5.10"
-          - model: OP-ACE-2-PRO
-            soc: kalama
-            branch: oneplus/sm8550
-            manifest: oneplus_ace2_pro_v.xml
-            android_version: android13
-            kernel_version: "5.15"
-          - model: OP12r
-            soc: kalama
-            branch: oneplus/sm8550
-            manifest: oneplus_12r_v.xml
-            android_version: android13
-            kernel_version: "5.15"
-    runs-on: ubuntu-latest
+          # - model: OP11
+          #   soc: kalama
+          #   branch: oneplus/sm8550
+          #   manifest: oneplus_11_v.xml
+          #   android_version: android13
+          #   kernel_version: "5.15"
+          - model: OP12
+            soc: pineapple
+            branch: oneplus/sm8650
+            manifest: oneplus12_v.xml
+            android_version: android14
+            kernel_version: "6.1"
+          # - model: OP11r
+          #   soc: waipio
+          #   branch: oneplus/sm8475
+          #   manifest: oneplus_11r_v.xml
+          #   android_version: android12
+          #   kernel_version: "5.10"
+          # - model: OP-OPEN
+          #   soc: kalama
+          #   branch: oneplus/sm8550
+          #   manifest: oneplus_open_v.xml
+          #   android_version: android13
+          #   kernel_version: "5.15"
+          # - model: OP-ACE-2
+          #   soc: waipio
+          #   branch: oneplus/sm8475
+          #   manifest: oneplus_ace2_v.xml
+          #   android_version: android12
+          #   kernel_version: "5.10"
+          # - model: OP10t
+          #   soc: waipio
+          #   branch: oneplus/sm8475
+          #   manifest: oneplus_10t_v.xml
+          #   android_version: android12
+          #   kernel_version: "5.10"
+          # - model: OP10pro
+          #   soc: waipio
+          #   branch: oneplus/sm8450
+          #   manifest: oneplus_10_pro_v.xml
+          #   android_version: android12
+          #   kernel_version: "5.10"
+          # - model: OP-ACE-2-PRO
+          #   soc: kalama
+          #   branch: oneplus/sm8550
+          #   manifest: oneplus_ace2_pro_v.xml
+          #   android_version: android13
+          #   kernel_version: "5.15"
+          # - model: OP12r
+          #   soc: kalama
+          #   branch: oneplus/sm8550
+          #   manifest: oneplus_12r_v.xml
+          #   android_version: android13
+          #   kernel_version: "5.15"
+    runs-on: ${{ github.repository_owner == 'WildKernels' && 'BigBoi' || 'ubuntu-latest' }}
     steps:
       - name: Select Appropriate SusFS Branch
         id: get-susfs-branch
@@ -136,10 +147,11 @@ jobs:
             SUSFS_BRANCH="gki-${{ matrix.android_version }}-${{ matrix.kernel_version }}"
           fi
           
+          echo "DEBUG: Selected SUSFS branch: $SUSFS_BRANCH"
           echo "susfs_branch=$SUSFS_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build Kernel
         uses: ./.github/actions/
@@ -163,57 +175,57 @@ jobs:
           - model: OP13
             soc: sun
             branch: oneplus/sm8750
-            manifest: oneplus_13.xml
+            manifest: oneplus_13_v.xml
             android_version: android15
             kernel_version: "6.6"
-          - model: OPAce5Pro
-            soc: sun
-            branch: oneplus/sm8750
-            manifest: oneplus_ace5_pro.xml
-            android_version: android15
-            kernel_version: "6.6"
-          - model: OP12
-            soc: pineapple
-            branch: oneplus/sm8650
-            manifest: oneplus12_v.xml
-            android_version: android14
-            kernel_version: "6.1"
-          - model: OP13r
-            soc: pineapple
-            branch: oneplus/sm8650
-            manifest: oneplus_13r.xml
-            android_version: android14
-            kernel_version: "6.1"
-          - model: OP-ACE-5
-            soc: pineapple
-            branch: oneplus/sm8650
-            manifest: oneplus_ace5.xml
-            android_version: android14
-            kernel_version: "6.1"
-          - model: OP-ACE-3V
-            soc: pineapple
-            branch: oneplus/sm7675
-            manifest: oneplus_ace_3v_v.xml
-            android_version: android14
-            kernel_version: "6.1"
-          - model: OP-NORD-4
-            soc: pineapple
-            branch: oneplus/sm7675
-            manifest: oneplus_nord_4_v.xml
-            android_version: android14
-            kernel_version: "6.1"
-          - model: OP-PAD-2
-            soc: pineapple
-            branch: oneplus/sm8650
-            manifest: oneplus_pad2_v.xml
-            android_version: android14
-            kernel_version: "6.1"
-          - model: OP13S
-            soc: sun
-            branch: oneplus/sm8750
-            manifest: oneplus_13s.xml
-            android_version: android15
-            kernel_version: "6.6"
+          # - model: OPAce5Pro
+          #   soc: sun
+          #   branch: oneplus/sm8750
+          #   manifest: oneplus_ace5_pro.xml
+          #   android_version: android15
+          #   kernel_version: "6.6"
+          # - model: OP13r
+          #   soc: pineapple
+          #   branch: oneplus/sm8650
+          #   manifest: oneplus_13r.xml
+          #   android_version: android14
+          #   kernel_version: "6.1"
+          # - model: OP-ACE-5
+          #   soc: pineapple
+          #   branch: oneplus/sm8650
+          #   manifest: oneplus_ace5.xml
+          #   android_version: android14
+          #   kernel_version: "6.1"
+          # - model: OP-ACE-3V
+          #   soc: pineapple
+          #   branch: oneplus/sm7675
+          #   manifest: oneplus_ace_3v_v.xml
+          #   android_version: android14
+          #   kernel_version: "6.1"
+          # - model: OP-NORD-4
+          #   soc: pineapple
+          #   branch: oneplus/sm7675
+          #   manifest: oneplus_nord_4_v.xml
+          #   android_version: android14
+          #   kernel_version: "6.1"
+          # - model: OP-PAD-2
+          #   soc: pineapple
+          #   branch: oneplus/sm8650
+          #   manifest: oneplus_pad2_v.xml
+          #   android_version: android14
+          #   kernel_version: "6.1"
+          # - model: OP13S
+          #   soc: sun
+          #   branch: oneplus/sm8750
+          #   manifest: oneplus_13s.xml
+          #   android_version: android15
+          #   kernel_version: "6.6"
+          # - model: OP13T
+          #   soc: sun
+          #   branch: oneplus/sm8750
+          #   manifest: oneplus_13t.xml
+          #   android_version: android15
+          #   kernel_version: "6.6"
     runs-on: ubuntu-latest
     steps:
       - name: Select Appropriate SusFS Branch
@@ -255,6 +267,102 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      - name: Apply Power Saving Optimizations
+        if: ${{ inputs.enable_power_savings }}
+        run: |
+          echo "Applying power saving kernel configurations..."
+          
+          # Create power saving config overlay
+          cat << 'EOF' > power_saving_config.txt
+          # CPU Frequency Scaling - Reduce max frequencies by ~50%
+          CONFIG_CPU_FREQ_DEFAULT_GOV_CONSERVATIVE=y
+          CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
+          CONFIG_CPU_FREQ_GOV_POWERSAVE=y
+          # CONFIG_CPU_FREQ_GOV_PERFORMANCE is not set
+          # CONFIG_CPU_FREQ_GOV_ONDEMAND is not set
+          
+          # CPU Boost Disable
+          # CONFIG_CPU_BOOST is not set
+          # CONFIG_DYNAMIC_STUNE_BOOST is not set
+          
+          # Thermal Throttling - More aggressive
+          CONFIG_THERMAL_GOV_STEP_WISE=y
+          CONFIG_THERMAL_GOV_LOW_LIMITS=y
+          # CONFIG_THERMAL_EMERGENCY_POWEROFF_DELAY_MS=1000 # 1秒过热关机阈值
+          
+          # Power Management
+          CONFIG_PM_SLEEP=y
+          CONFIG_PM_AUTOSLEEP=y
+          CONFIG_PM_WAKELOCKS=y
+          # CONFIG_PM_WAKELOCKS_LIMIT=100 # 与自动睡眠冲突
+          CONFIG_PM_WAKELOCKS_GC=y
+          CONFIG_PM_ADVANCED_DEBUG=y
+          CONFIG_SUSPEND_FREEZER=y
+          
+          # CPU Idle - More aggressive sleep states
+          CONFIG_CPU_IDLE=y
+          CONFIG_CPU_IDLE_GOV_LADDER=y
+          CONFIG_CPU_IDLE_GOV_MENU=y
+          CONFIG_CPU_IDLE_MULTIPLE_DRIVERS=y
+          
+          # Voltage Scaling - Reduce voltages
+          # CONFIG_REGULATOR_CPR3_HMSS=y # 骁龙8 Gen3无此硬件
+          CONFIG_REGULATOR_CPR3_MMSS=y
+          
+          # Scheduler - Power efficient
+          CONFIG_SCHED_MC=y
+          CONFIG_SCHED_SMT=y
+          CONFIG_SCHED_AUTOGROUP=y
+          CONFIG_CFS_BANDWIDTH=y
+          
+          # I/O Scheduler - Power efficient
+          CONFIG_IOSCHED_BFQ=y
+          CONFIG_BFQ_GROUP_IOSCHED=y
+          CONFIG_DEFAULT_BFQ=y
+          CONFIG_DEFAULT_IOSCHED="bfq"
+          
+          # Memory Management - Reduce performance for power
+          CONFIG_ZSMALLOC=y
+          CONFIG_PGTABLE_MAPPING=y
+          CONFIG_ZRAM_WRITEBACK=y
+          CONFIG_ZRAM_MEMORY_TRACKING=y
+          
+          # Network Power Saving
+          CONFIG_WIRELESS_EXT=y
+          CONFIG_CFG80211_WEXT=y
+          CONFIG_MAC80211_RC_DEFAULT_PID=y
+          
+          # GPU Power Saving
+          CONFIG_DRM_MSM_GPU_SUDO=y
+          
+          # Reduce Timer Frequency for Power Saving
+          CONFIG_HZ_100=y
+          # CONFIG_HZ_250 is not set
+          # CONFIG_HZ_300 is not set
+          # CONFIG_HZ_1000 is not set
+          CONFIG_HZ=100
+          
+          # Disable High Performance Features
+          # CONFIG_SMP_ON_UP is not set
+          # CONFIG_ARM_LPAE is not set
+          
+          # Conservative Memory Settings
+          CONFIG_COMPACTION=y
+          CONFIG_MIGRATION=y
+          CONFIG_KSM=y
+          CONFIG_DEFAULT_MMAP_MIN_ADDR=32768
+          
+          # Power Efficient Workqueue
+          CONFIG_WQ_POWER_EFFICIENT_DEFAULT=y
+          
+          # Reduce Kernel Log Level (less CPU usage)
+          CONFIG_DYNAMIC_DEBUG=n
+          CONFIG_PRINTK_TIME=n
+          
+          EOF
+          
+          echo "Power saving configuration created."
+
       - name: Build Kernel
         uses: ./.github/actions
         with:
@@ -266,23 +374,36 @@ jobs:
           kernel_version: ${{ matrix.kernel_version }}
           ksun_branch: ${{ inputs.ksun_branch }}
           susfs_branch: ${{ steps.get-susfs-branch.outputs.susfs_branch }}
+          power_saving_config: ${{ inputs.enable_power_savings && 'power_saving_config.txt' || '' }}
 
   trigger-release:
     needs:
       - build-batch-1
       - build-batch-2
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'WildKernels' && 'BigBoi' || 'ubuntu-latest' }}
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: ${{ github.repository_owner }}
       REPO_NAME: ${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.8 *TEST BUILD*"
+      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With KernelSU Next & SUSFS v1.5.8 + Power Saving *TEST BUILD*"
       RELEASE_NOTES: |
         This release contains KernelSU Next and SUSFS v1.5.8
         
-        Module: 
+        Modified Kernel Flasher:
+        -> https://github.com/fatalcoder524/KernelFlasher
+        
+        KSUN Manager:
+        -> https://github.com/KernelSU-Next/KernelSU-Next
+        
+        SUSFS Module:
         -> https://github.com/sidex15/ksu_module_susfs
+
+        BBR Optimizer Module:
+        -> https://github.com/fatalcoder524/TCP_Optimiser_Module
+
+        Mountify Module:
+        -> https://github.com/backslashxx/mountify
 
         Non-Official Managers:
         -> https://github.com/KernelSU-Next/KernelSU-Next
@@ -295,27 +416,90 @@ jobs:
         [+] Futile Maphide for jit-zygote-cache Detections
         [+] Magic Mount Support
         [+] Ptrace message leak fix for kernels < 5.16
+        [+] CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS Support for all kernels.
         [+] Manual Hooks [scope_min_manual_hooks_v1.4]
         [+] CONFIG_TMPFS_XATTR Support [Mountify Support]
-        [+] BBR v1 Support.
+        [+] Google BBR Support. | Use [this](https://github.com/fatalcoder524/TCP_Optimiser_Module) to enable
         [+] HMBIRD scx support for OnePlus 13 & OnePlus Ace 5 Pro.
+        [+] Forced ECN (Explicit Congestion Notification) for all connections by default
+        [+] Use LZ4 compression algorithm for ZRAM and Hybernation by default if available
+        
+        Power Saving Features (when enabled):
+        [+] Conservative CPU Governor (reduces performance ~50%)
+        [+] Aggressive thermal throttling
+        [+] Enhanced power management
+        [+] BFQ I/O scheduler for better battery life
+        [+] Reduced timer frequency (100Hz)
+        [+] Power efficient workqueue
+        [+] Memory compression optimizations
+        [+] GPU power saving modes
+
+        Boot images and AnyKernel3 ZIPs are available for each kernel version.
+        Boot images can be flashed directly via fastboot.
+        AnyKernel3 ZIPs can be flashed via custom recovery.
+
+        ### 👇👇👇 刷机文件说明 👇👇👇
+        每个设备的构建产物包含以下文件：
+
+        1. **AnyKernel3 ZIP包**:
+           - 文件名格式: `AnyKernel3_<设备型号>_<Android版本>-<内核版本>_Next_<KSU版本>_SUSFS_<SUSFS版本>.zip`
+           - 刷入方式: 通过TWRP等自定义Recovery刷入
+           - 特点: 保留原厂签名，无需解锁Bootloader
+
+        2. **Boot镜像文件**:
+           - 刷入方式: 通过Fastboot刷入
+           - 命令:
+             ```bash
+             fastboot flash boot <文件名>.img
+             fastboot reboot
+             ```
+
+        ### 使用示例（OnePlus 13）:
+        - **Recovery刷入**: 
+          - 文件: `AnyKernel3_OP13_android15-6.6_Next_10500_SUSFS_v1.5.8.zip`
+          - 步骤: 在TWRP中选择该文件刷入
+
+        - **Fastboot刷入**:
+          - 文件: `boot.img`
+          - 步骤:
+            ```bash
+            fastboot flash boot boot.img
+            fastboot reboot
+            ```
+        
+        ### 注意事项:
+        1. Fastboot刷入需要解锁Bootloader
+        2. 首次刷入前建议备份原boot分区
+        3. 请确保选择与设备完全匹配的文件
+        4. 刷机有风险，操作需谨慎
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Generate and Create New Tag
         run: |
             BASE_TAG="v1.5.8-r0"
+            
+            echo "DEBUG: Generating new tag from base: $BASE_TAG"
+            
+            # Get latest tag safely
             LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
-            if [ -z "$LATEST_TAG" ]; then
+            if [[ -z "$LATEST_TAG" ]]; then
+              echo "No existing tags found, using base tag"
               LATEST_TAG="$BASE_TAG"
             else
+              echo "Found latest tag: $LATEST_TAG"
               LATEST_TAG=$(printf "%s\n%s\n" "$LATEST_TAG" "$BASE_TAG" | sort -rV | head -n1)
             fi
+            
+            # Generate new tag
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
+            
             echo "New tag: $NEW_TAG"
             echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
+            
+            # Create and push tag
             git tag $NEW_TAG
             git push origin $NEW_TAG
 
@@ -336,13 +520,30 @@ jobs:
 
       - name: Upload Release Assets Dynamically
         run: |
+          # Validate NEW_TAG is set
+          if [[ -z "${NEW_TAG:-}" ]]; then
+            echo "ERROR: NEW_TAG is not set"
+            exit 1
+          fi
+          
+          echo "DEBUG: Uploading files for tag: $NEW_TAG"
+          echo "DEBUG: Available files:"
+          find ./downloaded-artifacts -type f | head -20
+          
+          # Upload files
           for file in ./downloaded-artifacts/kernel-*/*; do
-              if [ -d "$file" ]; then
+              if [[ -d "$file" ]]; then
+                  echo "Skipping directory: $file"
                   continue
               fi
-              echo "Uploading $file..."
-              gh release upload ${{ env.NEW_TAG }} "$file"
+              if [[ -f "$file" ]]; then
+                  echo "Uploading: $file"
+                  gh release upload "$NEW_TAG" "$file" || {
+                    echo "WARNING: Failed to upload $file"
+                  }
+              fi
           done
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_TAG: ${{ env.NEW_TAG }}
@@ -350,4 +551,4 @@ jobs:
       - name: Display Files Uploaded
         run: |
           echo "GitHub release created with the following files:"
-          ls ./downloaded-artifacts/**/*
+          find ./downloaded-artifacts -type f -exec basename {} \; | sort
