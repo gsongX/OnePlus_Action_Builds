@@ -40,6 +40,19 @@ inputs:
 runs:
     using: "composite"
     steps:
+      - name: Maximize Build Space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-dotnet: 'true'          # Frees ~2 GB
+          remove-android: 'true'         # Frees ~9 GB
+          remove-haskell: 'true'         # Frees ~5.2 GB
+          remove-codeql: 'true'          # Frees ~5.4 GB
+          remove-docker-images: 'true'   # Frees ~3.2 GB
+          remove-large-packages: 'true'  # Frees ~3.1 GB
+          remove-swapfile: 'true'        # Frees ~4 GB
+          remove-cached-tools: 'false'   # Avoid unless confirmed safe
+          verbose: 'true'                # Enable detailed logging
+
       - name: Setup Build System
         shell: bash
         run: |
@@ -120,11 +133,14 @@ runs:
           echo "Using branch for SUSFS: $SUSFS_BRANCH"
           
           # Clone repositories using the branch names
-          git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
-          git clone https://github.com/TheWildJames/kernel_patches.git
+          git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH" --depth=1
+          git clone https://github.com/TheWildJames/kernel_patches.git --depth=1
+
+          # next修复补丁
+          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git zzh_patch --depth=1
           
           # Clone the repo with all branches and history (can optimize later if needed)
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git --depth=1
           cd susfs4ksu || exit 1
           
           # Try to check if TARGET_REF is a valid branch or tag
@@ -212,14 +228,24 @@ runs:
             "v1.5.8")
               cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
               patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-              cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_apk_sign.c.patch ./
-              patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
-              cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_core_hook.c.patch ./
-              patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
-              cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_selinux.c.patch ./
-              patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
-              cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_ksud.c.patch ./
-              patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+              # #Hunk #1 FAILED at 314.
+              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_apk_sign.c.patch ./
+              # patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
+              # #Hunk #2 FAILED at 46.
+              # #Hunk #14 FAILED at 915.
+              # #Hunk #18 FAILED at 1009.
+              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_core_hook.c.patch ./
+              # patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
+              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_selinux.c.patch ./
+              # patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
+              # #Hunk #1 FAILED at 57.
+              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_ksud.c.patch ./
+              # patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+              cp ../../zzh_patch/next-patch/* ./
+              patch -p1 --fuzz=3 --forward < apk_sign.patch
+              patch -p1 --fuzz=3 --forward < core_hook.patch
+              patch -p1 --fuzz=3 --forward < ksud.patch
+              patch -p1 --fuzz=3 --forward < selinux.patch
               ;;
             *)
               echo "Invalid version: $susfs_version"
