@@ -26,7 +26,7 @@ inputs:
   ksun_branch:
     required: true
     type: string
-    default: "next"
+    default: stable
   susfs_branch:
     required: true
     type: string
@@ -51,15 +51,13 @@ runs:
           remove-large-packages: 'true'  # Frees ~3.1 GB
           remove-swapfile: 'true'        # Frees ~4 GB
           remove-cached-tools: 'false'   # Avoid unless confirmed safe
-          verbose: 'true'                # Enable detailed logging
+          verbose: 'false'                # Enable detailed logging
 
       - name: Setup Build System
         shell: bash
         run: |
           export DEBIAN_FRONTEND=noninteractive
           echo "DEBIAN_FRONTEND=noninteractive" >> $GITHUB_ENV
-          
-          df -h
           
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/powershell /usr/share/swift || true
           sudo docker image prune --all --force
@@ -90,6 +88,7 @@ runs:
           # Install dependencies
           echo "Installing Repo and Python"
           sudo apt update
+          sudo apt upgrade -y
           sudo apt install -y python3 python-is-python3 git curl
           
           mkdir -p ./git-repo
@@ -133,14 +132,11 @@ runs:
           echo "Using branch for SUSFS: $SUSFS_BRANCH"
           
           # Clone repositories using the branch names
-          git clone https://github.com/TheWildJames/AnyKernel3.git -b "$ANYKERNEL_BRANCH" --depth=1
-          git clone https://github.com/TheWildJames/kernel_patches.git --depth=1
-
-          # next修复补丁
-          git clone https://github.com/zzh20188/GKI_KernelSU_SUSFS.git zzh_patch --depth=1
+          git clone https://github.com/WildKernels/AnyKernel3.git -b "$ANYKERNEL_BRANCH" 
+          git clone https://github.com/WildKernels/kernel_patches.git 
           
           # Clone the repo with all branches and history (can optimize later if needed)
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git --depth=1
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git
           cd susfs4ksu || exit 1
           
           # Try to check if TARGET_REF is a valid branch or tag
@@ -167,21 +163,37 @@ runs:
           $REPO --version
           $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast
 
+          echo "Clang Setting : $CONFIG..."
 
-          echo "list $GITHUB_WORKSPACE/$CONFIG..."
-          tree -a -L 3 $GITHUB_WORKSPACE/$CONFIG
-
-
-          git clone https://gitlab.com/kei-space/clang/r522817.git $PLATFORM/prebuilts/clang/host/linux-x86/clang-r522817 --depth=1
-          # $PLATFORM/prebuilts/clang/host/linux-x86/clang-r547379
+          git clone https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86 $PLATFORM/prebuilts/clang/host/linux-x86/clang -b aosp-new/main --depth=1
           
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-3289846"
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r498229b"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r510928"
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r530567"
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r536225"
+          # rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r522817"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r547379"
-          
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-stable"
+
+          #https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86/-/blob/aosp-new/main/llvm-binutils-stable/llvm-ar
+          # link ../clang-r547379/bin/llvm-ar
+          #如果要使用clang-r547379，如果复制的 aosp-new/main 的llvm-binutils-stable 到linux-x86目录下，
+          #顺便删除ks-kernel.lnx.4.0.r1-rel 的 llvm-binutils-stable ，因为它链接的是  link ../clang-r522817/bin/llvm-ar 版本
+          # rm -rf $PLATFORM/prebuilts/clang/host/linux-x86/llvm-binutils-stable
+          # cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang/llvm-binutils-stable $PLATFORM/prebuilts/clang/host/linux-x86/llvm-binutils-stable
+
+          #https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86/-/blob/ks-kernel.lnx.4.0.r1-rel/llvm-binutils-stable/llvm-ar
+          # link ../clang-r522817/bin/llvm-ar
+
+          mv $PLATFORM/prebuilts/clang/host/linux-x86/clang/clang-r522817 $PLATFORM/prebuilts/clang/host/linux-x86
+          cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang-r522817  $PLATFORM/prebuilts/clang/host/linux-x86/clang-stable
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang"
+            
           sed -i 's/r510928/r522817/g' $PLATFORM/common/build.config.constants
-          # sed -i 's/r510928/r547379/g' $PLATFORM/msm-kernel/build.config.constants
-          # sed -i 's/r510928/r547379/g' $PLATFORM/.source_date_epoch_dir/build.config.constants
-          # sed -i '/VERSIONS = \[/,/\]/c\VERSIONS = [\n    # keep sorted\n    "r547379",\n]' $PLATFORM/prebuilts/clang/host/linux-x86/kleaf/versions.bzl
+          sed -i 's/r510928/r522817/g' $PLATFORM/msm-kernel/build.config.constants
+          sed -i 's/r510928/r522817/g' $PLATFORM/.source_date_epoch_dir/build.config.constants | true
+          sed -i '/VERSIONS = \[/,/\]/c\VERSIONS = [\n    # keep sorted\n    "r522817",\n]' $PLATFORM/prebuilts/clang/host/linux-x86/kleaf/versions.bzl | true
 
       - name: Add KernelSU Next
         shell: bash
@@ -196,6 +208,8 @@ runs:
           else
             curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s ${{ inputs.ksun_branch }}
           fi
+
+          git submodule update --init --recursive
 
       - name: Apply SUSFS Patches
         shell: bash
@@ -216,7 +230,10 @@ runs:
           susfs_version=$(grep '#define SUSFS_VERSION' ../common/include/linux/susfs.h | awk -F'"' '{print $2}')
           echo "SUSVER=$susfs_version" >> $GITHUB_ENV
           BASE_VERSION=10200
-          KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=${{ inputs.ksun_branch }}&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" $BASE_VERSION)
+          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" $BASE_VERSION)
+          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" $PLATFORM/KernelSU-Next/kernel/Makefile
+          sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" $PLATFORM/common/drivers/kernelsu/Makefile
+          sed -i "s/KSU_VERSION := 11998/KSU_VERSION := ${KSU_VERSION}/" $PLATFORM/common/drivers/kernelsu/Makefile
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           echo "KernelSU Next Version: $KSU_VERSION"
           echo "SusFS Version: $susfs_version"
@@ -225,27 +242,17 @@ runs:
             "v1.5.5"|"v1.5.6"|"v1.5.7")
               cp "../../../kernel_patches/next/0001-kernel-implement-susfs-v1.5.5-v1.5.7-KSUN-v1.0.8.patch" "./ksun_susfs_latest.patch"
               ;;
-            "v1.5.8")
+            "v1.5.8"|"v1.5.9")
               cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
               patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-              # #Hunk #1 FAILED at 314.
-              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_apk_sign.c.patch ./
-              # patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
-              # #Hunk #2 FAILED at 46.
-              # #Hunk #14 FAILED at 915.
-              # #Hunk #18 FAILED at 1009.
-              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_core_hook.c.patch ./
-              # patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
-              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_selinux.c.patch ./
-              # patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
-              # #Hunk #1 FAILED at 57.
-              # cp ../../../kernel_patches/next/susfs_fix_patches/v1.5.8/fix_ksud.c.patch ./
-              # patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
-              cp ../../zzh_patch/next-patch/* ./
-              patch -p1 --fuzz=3 --forward < apk_sign.patch
-              patch -p1 --fuzz=3 --forward < core_hook.patch
-              patch -p1 --fuzz=3 --forward < ksud.patch
-              patch -p1 --fuzz=3 --forward < selinux.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
               ;;
             *)
               echo "Invalid version: $susfs_version"
@@ -266,7 +273,6 @@ runs:
           fi
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
           
-          
           KERNEL_VERSION="${{ inputs.kernel_version }}"
           MIN_VERSION="5.16"
           
@@ -285,7 +291,7 @@ runs:
             echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
             patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird_kernel_patch.patch"
             echo "Patching hmbird files!"
-            cd ./kernel/sched
+            # cd ./kernel/sched
             # rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c hmbird_sched_proc.h hmbird_sched_proc_main.c
             # patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/hmbird_files_patch.patch"
           else
@@ -412,28 +418,6 @@ runs:
           echo "CONFIG_IP_NF_TARGET_TTL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> ./common/arch/arm64/configs/gki_defconfig
-
-      # - name: Disable OnePlus Kernel Module
-      #   shell: bash
-      #   run: |
-      #     echo "Changing to configuration directory: $CONFIG..."
-      #     cd "$CONFIG/kernel_platform"
-      #     if [ "${{ inputs.android_version }}" = "android15" ] && [ "${{ inputs.kernel_version }}" = "6.6" ]; then
-      #       sed -i 's/CONFIG_TIME_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_REGMAP_KUNIT=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_INPUT_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_SND_SOC_TOPOLOGY_KUNIT_TEST=m/CONFIG_SND_SOC_TOPOLOGY_KUNIT_TEST=n/g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_SND_SOC_UTILS_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_HID_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_RTC_LIB_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_CLK_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_CLK_GATE_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_IIO_FORMAT_KUNIT_TEST=m/C/g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_EXT4_KUNIT_TESTS=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_FAT_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_KUNIT_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #       sed -i 's/CONFIG_KUNIT_EXAMPLE_TEST=m//g' "./common/arch/arm64/configs/gki_defconfig"
-      #     fi
       
       - name: Run sed and perl Commands
         shell: bash
@@ -446,10 +430,6 @@ runs:
           sed -i 's/CONFIG_LTO=n/CONFIG_LTO=y/' "./common/arch/arm64/configs/gki_defconfig"
           sed -i 's/CONFIG_LTO_CLANG_FULL=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
           sed -i 's/CONFIG_LTO_CLANG_NONE=y/CONFIG_LTO_CLANG_THIN=y/' "./common/arch/arm64/configs/gki_defconfig"
-
-
-          echo " ⚡️ 显示 gki_defconfig 配置文件"
-          cat "./common/arch/arm64/configs/gki_defconfig"
           
           # Run sed commands for modifications
           sed -i 's/check_defconfig//' ./common/build.config.gki
@@ -532,13 +512,11 @@ runs:
           echo "Navigating to AnyKernel3 directory..."
           cd ../AnyKernel3
           
-          #不修复，不管国行版还是海外版，不打补丁，刚刷ak3是循环重启的，如果进入系统后再刷回官方dtbo.img 是可以进入系统的
           if [ "${{ inputs.model }}" == "OPAce5Pro" ] || [ "${{ inputs.model }}" == "OP13" ]; then
             cp ../kernel_patches/oneplus/hmbird/bins/* ./tools/
             patch -F 3 < ../kernel_patches/oneplus/hmbird/ak3_hmbird_patch.patch
           fi
-
-          # 创建 AnyKernel3 ZIP 文件
+          
           # Zip the files in the AnyKernel3 directory with a new naming convention
           ZIP_NAME="AnyKernel3_${{ inputs.model }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}_Next_${{ env.KSUVER }}_SUSFS_${{ env.SUSVER }}.zip"
           echo "Creating zip file $ZIP_NAME..."
@@ -547,6 +525,6 @@ runs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ env.CONFIG }} # 例如：kernel-OP13
+          name: kernel-${{ env.CONFIG }}
           path: |
             *.zip
