@@ -163,37 +163,51 @@ runs:
           $REPO --version
           $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast
 
+      - name: Add New LLVM and CLang Version 
+        shell: bash
+        run: |
           echo "Clang Setting : $CONFIG..."
 
-          git clone https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86 $PLATFORM/prebuilts/clang/host/linux-x86/clang -b aosp-new/main --depth=1
+          # git clone https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86 $PLATFORM/prebuilts/clang/host/linux-x86/clang -b aosp-new/main --depth=1
+          git clone https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86 $PLATFORM/prebuilts/clang/host/linux-x86/clang -b aosp-new/android15-qpr2-release --depth=1
           
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-3289846"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r498229b"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r510928"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r530567"
-          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r536225"
-          # rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r522817"
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r530567b"
+          # rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r536225"
+
+          ## clang-r536225
+          
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r522817"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r547379"
-          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-stable"
 
-          #https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86/-/blob/aosp-new/main/llvm-binutils-stable/llvm-ar
-          # link ../clang-r547379/bin/llvm-ar
-          #如果要使用clang-r547379，如果复制的 aosp-new/main 的llvm-binutils-stable 到linux-x86目录下，
-          #顺便删除ks-kernel.lnx.4.0.r1-rel 的 llvm-binutils-stable ，因为它链接的是  link ../clang-r522817/bin/llvm-ar 版本
-          # rm -rf $PLATFORM/prebuilts/clang/host/linux-x86/llvm-binutils-stable
-          # cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang/llvm-binutils-stable $PLATFORM/prebuilts/clang/host/linux-x86/llvm-binutils-stable
+          mv $PLATFORM/prebuilts/clang/host/linux-x86/clang/clang-r536225 $PLATFORM/prebuilts/clang/host/linux-x86
+          rm -rf $PLATFORM/prebuilts/clang/host/linux-x86/clang-stable
+          cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang/clang-stable  $PLATFORM/prebuilts/clang/host/linux-x86/clang-stable
+          rm -rf rm -rf $PLATFORM/prebuilts/clang/host/linux-x86/llvm-binutils-stable
+          cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang/llvm-binutils-stable  $PLATFORM/prebuilts/clang/host/linux-x86/llvm-binutils-stable
+          rm -rf $PLATFORM/prebuilts/clang/host/linux-x86/profiles
+          cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang/profiles $PLATFORM/prebuilts/clang/host/linux-x86/profiles
+          
+          sed -i 's/r510928/r536225/g' $PLATFORM/common/build.config.constants
+          sed -i 's/r510928/r536225/g' $PLATFORM/msm-kernel/build.config.constants
+          sed -i 's/r510928/r536225/g' $PLATFORM/.source_date_epoch_dir/build.config.constants | true
+          sed -i '/VERSIONS = \[/,/\]/c\VERSIONS = [\n    # keep sorted\n    "r536225",\n]' $PLATFORM/prebuilts/clang/host/linux-x86/kleaf/versions.bzl | true
 
-          #https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86/-/blob/ks-kernel.lnx.4.0.r1-rel/llvm-binutils-stable/llvm-ar
-          # link ../clang-r522817/bin/llvm-ar
 
-          mv $PLATFORM/prebuilts/clang/host/linux-x86/clang/clang-r522817 $PLATFORM/prebuilts/clang/host/linux-x86
-          cp -r $PLATFORM/prebuilts/clang/host/linux-x86/clang-r522817  $PLATFORM/prebuilts/clang/host/linux-x86/clang-stable
-          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang"
+          ## clang-r522817
+          # rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r547379"
+
+          # mv $PLATFORM/prebuilts/clang/host/linux-x86/clang/clang-r522817 $PLATFORM/prebuilts/clang/host/linux-x86
             
-          sed -i 's/r510928/r522817/g' $PLATFORM/common/build.config.constants
-          sed -i 's/r510928/r522817/g' $PLATFORM/msm-kernel/build.config.constants
-          sed -i 's/r510928/r522817/g' $PLATFORM/.source_date_epoch_dir/build.config.constants | true
-          sed -i '/VERSIONS = \[/,/\]/c\VERSIONS = [\n    # keep sorted\n    "r522817",\n]' $PLATFORM/prebuilts/clang/host/linux-x86/kleaf/versions.bzl | true
+          # sed -i 's/r510928/r522817/g' $PLATFORM/common/build.config.constants
+          # sed -i 's/r510928/r522817/g' $PLATFORM/msm-kernel/build.config.constants
+          # sed -i 's/r510928/r522817/g' $PLATFORM/.source_date_epoch_dir/build.config.constants | true
+          # sed -i '/VERSIONS = \[/,/\]/c\VERSIONS = [\n    # keep sorted\n    "r522817",\n]' $PLATFORM/prebuilts/clang/host/linux-x86/kleaf/versions.bzl | true
+
+          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang"
 
       - name: Add KernelSU Next
         shell: bash
@@ -291,9 +305,9 @@ runs:
             echo 'obj-y += hmbird_patch.o' >> ./drivers/Makefile
             patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird_kernel_patch.patch"
             echo "Patching hmbird files!"
-            # cd ./kernel/sched
-            # rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c hmbird_sched_proc.h hmbird_sched_proc_main.c
-            # patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/hmbird_files_patch.patch"
+            cd ./kernel/sched
+            rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c hmbird_sched_proc.h hmbird_sched_proc_main.c
+            patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/hmbird_files_patch.patch"
           else
             echo "Not OPAce5Pro / OP13 , skipping fengchi patch"
           fi
