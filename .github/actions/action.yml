@@ -100,6 +100,7 @@ runs:
           echo "CONFIG=${{ inputs.model }}" >> $GITHUB_ENV
 
       - name: Configure Git & Install dependencies # 配置 Git & 安装依赖
+        shell: bash
         run: |
           git config --global user.name "gsongX"
           git config --global user.email "gsong2014@foxmail.com"
@@ -502,19 +503,33 @@ runs:
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> "$DEFCONFIG"
 
       - name: Remove OnePlus Kernel Module
+        shell: bash
         run: |          
           cd "$CONFIG/kernel_platform/common"
           if [ "${{ inputs.kernel_version }}" = "6.6" ]; then
-              wget https://github.com/reigadegr/Action-Build/raw/main/patchs/6.6/blacklist_module.patch
+              wget https://github.com/gsongX/OnePlus_KernelSU_SUSFS/raw/dev/patchs/6.6/blacklist_module.patch
               if [ -z "$(grep "blocked_modules" kernel/module/main.c)" ]; then
                 patch -p1 -F 3 < blacklist_module.patch || true
               fi
           fi
-          
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./build.config.gki
           echo "移除内核模块完成"
 
+      - name: Fix upstream bugs
+        shell: bash
+        run: |
+          cd "$CONFIG/kernel_platform/common"      
+          if [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+              for i in "fix_screen_off_crash.patch" \
+                "fix_screen_flicker.patch" \
+                "unlock_cpufreq.patch" \
+                "fix_usb_network_share.patch"; do
+                 wget https://github.com/gsongX/OnePlus_KernelSU_SUSFS/raw/dev/patchs/6.6/$i
+                 patch -p1 -F 3 < $i || true
+              done
+          fi
+          
       - name: Run sed and perl Commands
         shell: bash
         run: |
