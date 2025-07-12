@@ -99,6 +99,15 @@ runs:
           # Set CONFIG Environment Variable
           echo "CONFIG=${{ inputs.model }}" >> $GITHUB_ENV
 
+      - name: Configure Git & Install dependencies # 配置 Git & 安装依赖
+        run: |
+          git config --global user.name "gsongX"
+          git config --global user.email "gsong2014@foxmail.com"
+          sudo apt update -y
+          sudo apt-mark hold firefox
+          sudo apt upgrade -y -o Dpkg::Options::="--force-confold"
+          sudo apt install -y python3 git git-lfs curl && git lfs install
+
       - name: Set Environment Variable # 设置内核环境变量
         shell: bash
         run: |
@@ -159,11 +168,11 @@ runs:
           
           # Initialize and sync kernel source
           echo "Initializing and syncing kernel source..."
-          $REPO init -u https://github.com/gsongX/kernel_manifest.git -b ${{ inputs.branch }} -m ${{ inputs.manifest }} --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags
+          $REPO init -u https://github.com/gsongX/kernel_manifest.git -b ${{ inputs.branch }} -m ${{ inputs.manifest }} --repo-rev=v2.16 --depth=1 --no-clone-bundle --no-tags || { echo "repo init 失败"; exit 1; }
           
           # Sync repo and apply patches
           $REPO --version
-          $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast
+          $REPO --trace sync -c --no-clone-bundle --no-tags --optimized-fetch -j$(nproc --all) --fail-fast || { echo "repo sync 失败"; exit 1; }
 
       - name: Add New LLVM and CLang Version 
         shell: bash
@@ -173,7 +182,7 @@ runs:
           git clone https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86 $PLATFORM/prebuilts/clang/host/linux-x86/clang -b aosp-new/main --depth=1
           # git clone https://git.codelinaro.org/clo/la/kernelplatform/prebuilts-master/clang/host/linux-x86 $PLATFORM/prebuilts/clang/host/linux-x86/clang -b aosp-new/android15-qpr2-release --depth=1
           
-          rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-3289846"
+          # rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-3289846"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r498229b"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r510928"
           rm -rf "$PLATFORM/prebuilts/clang/host/linux-x86/clang-r530567"
@@ -491,7 +500,21 @@ runs:
           echo "CONFIG_IP_NF_TARGET_TTL=y" >> "$DEFCONFIG"
           echo "CONFIG_IP6_NF_TARGET_HL=y" >> "$DEFCONFIG"
           echo "CONFIG_IP6_NF_MATCH_HL=y" >> "$DEFCONFIG"
-      
+
+      - name: Remove OnePlus Kernel Module
+        run: |          
+          cd "$CONFIG/kernel_platform/common"
+          if [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+              wget https://github.com/reigadegr/Action-Build/raw/main/patchs/6.6/blacklist_module.patch
+              if [ -z "$(grep "blocked_modules" kernel/module/main.c)" ]; then
+                patch -p1 -F 3 < blacklist_module.patch || true
+              fi
+          fi
+          
+          # Remove check_defconfig
+          sed -i 's/check_defconfig//' ./build.config.gki
+          echo "移除内核模块完成"
+
       - name: Run sed and perl Commands
         shell: bash
         run: |
@@ -500,8 +523,6 @@ runs:
           
           echo "Running sed commands..."
           
-          # Adjust localversion strings
-          sed -i 's/check_defconfig//' ./common/build.config.gki
           # For Old setlocalversion Script
           tac ./common/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./common/scripts/setlocalversion.tmp && mv ./common/scripts/setlocalversion.tmp ./common/scripts/setlocalversion
           tac ./msm-kernel/scripts/setlocalversion | sed '0,/echo "\$res"/s//res=\$\(echo \$res \| cut -d- -f1-2\)-gs0ng\;echo "\$res"\;/' | tac > ./msm-kernel/scripts/setlocalversion.tmp && mv ./msm-kernel/scripts/setlocalversion.tmp ./msm-kernel/scripts/setlocalversion
