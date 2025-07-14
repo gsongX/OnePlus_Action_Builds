@@ -1,4 +1,4 @@
-name: Build and Release OnePlus Kernels
+name: 批量编译官方一加安卓内核KSU-Next
 
 permissions:
   contents: write
@@ -20,30 +20,6 @@ on:
           - stable
           - next
         default: next
-      android12-5_10_susfs_branch:
-        description: "Choose SusFS Branch for android12-5.10"
-        type: string
-        default: "gki-android12-5.10"
-      android13-5_10_susfs_branch:
-        description: "Choose SusFS Branch for android13-5.10"
-        type: string
-        default: "gki-android13-5.10"
-      android13-5_15_susfs_branch:
-        description: "Choose SusFS Branch for android13-5.15"
-        type: string
-        default: "gki-android13-5.15"
-      android14-5_15_susfs_branch:
-        description: "Choose SusFS Branch for android14-5.15"
-        type: string
-        default: "gki-android14-5.15"
-      android14-6_1_susfs_branch:
-        description: "Choose SusFS Branch for android14-6.1"
-        type: string
-        default: "gki-android14-6.1"
-      android15-6_6_susfs_branch:
-        description: "Choose SusFS Branch for android15-6.6"
-        type: string
-        default: "gki-android15-6.6"
       enable_power_savings:
         description: "Enable power saving optimizations (reduces performance by ~50%)"
         required: true
@@ -120,32 +96,28 @@ jobs:
           
           case "$KERNEL_STRING" in
             "android12-5.10")
-              SUSFS_BRANCH="${{ inputs.android12-5_10_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android13-5.10")
-              SUSFS_BRANCH="${{ inputs.android13-5_10_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android13-5.15")
-              SUSFS_BRANCH="${{ inputs.android13-5_15_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android14-5.15")
-              SUSFS_BRANCH="${{ inputs.android14-5_15_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android14-6.1")
-              SUSFS_BRANCH="${{ inputs.android14-6_1_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android15-6.6")
-              SUSFS_BRANCH="${{ inputs.android15-6_6_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             *)
               echo "Invalid kernel version or unsupported: $KERNEL_STRING"
               exit 1
               ;;
           esac
-          
-          if [[ -z "$SUSFS_BRANCH" ]]; then
-            SUSFS_BRANCH="gki-${{ matrix.android_version }}-${{ matrix.kernel_version }}"
-          fi
           
           echo "susfs_branch=$SUSFS_BRANCH" >> $GITHUB_OUTPUT
 
@@ -249,7 +221,7 @@ jobs:
           echo "Power saving configuration created."
 
       - name: Build Kernel
-        uses: ./.github/actions/
+        uses: ./.github/actions
         with:
           model: ${{ matrix.model }}
           soc: ${{ matrix.soc }}
@@ -331,32 +303,28 @@ jobs:
           
           case "$KERNEL_STRING" in
             "android12-5.10")
-              SUSFS_BRANCH="${{ inputs.android12-5_10_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android13-5.10")
-              SUSFS_BRANCH="${{ inputs.android13-5_10_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android13-5.15")
-              SUSFS_BRANCH="${{ inputs.android13-5_15_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android14-5.15")
-              SUSFS_BRANCH="${{ inputs.android14-5_15_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android14-6.1")
-              SUSFS_BRANCH="${{ inputs.android14-6_1_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             "android15-6.6")
-              SUSFS_BRANCH="${{ inputs.android15-6_6_susfs_branch }}"
+              SUSFS_BRANCH="gki-$KERNEL_STRING"
               ;;
             *)
               echo "Invalid kernel version or unsupported: $KERNEL_STRING"
               exit 1
               ;;
           esac
-          
-          if [[ -z "$SUSFS_BRANCH" ]]; then
-            SUSFS_BRANCH="gki-${{ matrix.android_version }}-${{ matrix.kernel_version }}"
-          fi
           
           echo "susfs_branch=$SUSFS_BRANCH" >> $GITHUB_OUTPUT
 
