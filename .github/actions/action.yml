@@ -582,18 +582,19 @@ runs:
           sed -i 's/check_defconfig//' ./build.config.gki
           echo "移除内核模块完成"
 
-      - name: Fix upstream bugs
-        shell: bash
-        run: |
-          cd "$CONFIG/kernel_platform/common"
-          # "unlock_cpufreq.patch" \ 
-          if [ "${{ inputs.kernel_version }}" = "6.6" ]; then
-              for i in "fix_screen_off_crash.patch" \
-                "fix_screen_flicker.patch" \
-                "fix_usb_network_share.patch"; do
-                 patch -p1 -F 3 < ../../../patchs/6.6/$i || true
-              done
-          fi
+      # - name: Fix upstream bugs
+      #   shell: bash
+      #   run: |
+      #     cd "$CONFIG/kernel_platform/common"
+          
+      #     if [ "${{ inputs.kernel_version }}" = "6.6" ]; then
+      #         for i in "fix_screen_off_crash.patch" \
+      #           "unlock_cpufreq.patch" \ 
+      #           "fix_screen_flicker.patch" \
+      #           "fix_usb_network_share.patch"; do
+      #            patch -p1 -F 3 < ../../../patchs/6.6/$i || true
+      #         done
+      #     fi
           
       - name: Run sed and perl Commands
         shell: bash
