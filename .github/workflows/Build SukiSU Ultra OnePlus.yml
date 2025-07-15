@@ -68,11 +68,6 @@ on:
         description: "是否启用极速构建？"
         required: true
         default: true
-      VFS:
-        type: boolean
-        description: "是否启用手动钩子(VFS)？"
-        required: true
-        default: true
       KPM:
         type: boolean
         description: "是否启用内核模块(KPM)？"
@@ -315,7 +310,6 @@ jobs:
           echo "Custom BUILD_TIME: ${{ github.event.inputs.BUILD_TIME }}"
           echo "Custom SUFFIX: ${{ github.event.inputs.SUFFIX }}"
           echo "Selected SUSFS_CI: ${{ github.event.inputs.SUSFS_CI }}"
-          echo "Selected VFS: ${{ github.event.inputs.VFS }}"
           echo "Selected KPM: ${{ github.event.inputs.KPM }}"
           echo "Selected FAST_BUILD: ${{ github.event.inputs.FAST_BUILD }}"
           echo "Selected SCHED: ${{ github.event.inputs.SCHED }}"
@@ -597,15 +591,21 @@ jobs:
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
+          cd $PLATFORM/common
+          cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
+          echo "正在打vfs补丁"
+          patch -p1 -F 3 < syscall_hooks.patch
+          echo "vfs_patch完成"
+
           if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
             echo "正在拉取zram补丁"
-            cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux/
-            cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib/
-            cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto/
-            cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
+            cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* $PLATFORM/common/include/linux/
+            cp -r ../SukiSU_patch/other/zram/lz4k/lib/* $PLATFORM/common/lib/
+            cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* $PLATFORM/common/crypto/
+            cp -r ../SukiSU_patch/other/zram/lz4k_oplus $PLATFORM/common/lib/
           fi
 
-          cd ./common
+          cd $PLATFORM/common
           GKI_V="${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}"
           SUBLEVEL=$(grep '^SUBLEVEL *=' Makefile | head -n1 | cut -d= -f2 | tr -d ' ')
 
@@ -652,15 +652,6 @@ jobs:
           patch -p1 -F 3 < hmbird_patch.patch
           echo "OGKI转换GKI_patch完成"
 
-      - name: Apply VFS
-        if: ${{ github.event.inputs.VFS == 'true' }}
-        run: |
-          cd $PLATFORM/common
-          cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
-          echo "正在打vfs补丁"
-          patch -p1 -F 3 < syscall_hooks.patch
-          echo "vfs_patch完成"
-
       - name: Apply ZRAM
         if: ${{ github.event.inputs.ZRAM == 'true' }}
         run: |
@@ -688,15 +679,9 @@ jobs:
             echo "CONFIG_KPM=y" >> "$DEFCONFIG"
           fi
 
-          # VFS配置
-          if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
-            echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$DEFCONFIG"
-            echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$DEFCONFIG"
-          else
-            echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> "$DEFCONFIG"
-            echo "CONFIG_KPROBES=y" >> "$DEFCONFIG"
-          fi
-
+          echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$DEFCONFIG"
+          
           # SUSFS配置
           echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> "$DEFCONFIG"
@@ -942,7 +927,7 @@ jobs:
       - name: Set zip Suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD' || '' }}${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.SCHED== 'true' && '_SCHED' || '' }}" >> $GITHUB_OUTPUT
 
       # 从一加源码中获取适用的 Android 版本信息，注意是系统 Android 版本而非你填写的内核 Android 版本，非一加官方源码可能需要修改或删除这一步
       - name: Auto map FILE to Android version by manifest
