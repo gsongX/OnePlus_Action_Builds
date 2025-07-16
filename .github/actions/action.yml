@@ -343,20 +343,21 @@ runs:
               #Hunk #18 FAILED at 1102.
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
-              #Hunk #3 FAILED at 57.
-              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
-              patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
               #Hunk #1 FAILED at 57.
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
               #Hunk #1 FAILED at 24
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_rules.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_rules.c.patch
+              #Hunk #3 FAILED at 57.
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
               #Hunk #3 FAILED at 38.
               #Hunk #4 FAILED at 73.
               #Hunk #7 FAILED at 148.
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_sucompat.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_sucompat.c.patch
+              patch -p1 --forward --fuzz=3 < ../../../patchs/next/remove_ksu_access_ok.patch
               ;;
             *)
               echo "Invalid version: $susfs_version"
