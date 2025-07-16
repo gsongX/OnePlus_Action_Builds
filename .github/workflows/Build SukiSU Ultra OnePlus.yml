@@ -764,6 +764,7 @@ jobs:
       # 风驰内核，以 sm8750 为主体，其他 CPU 可能无效或者无法跑出
       - name: Add sched_ext
         if: ${{ github.event.inputs.SCHED == 'true' }}
+        shell: bash
         run: |
           cd $PLATFORM/
           git clone https://github.com/HanKuCha/sched_ext.git

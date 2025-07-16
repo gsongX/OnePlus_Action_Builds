@@ -25,6 +25,11 @@ on:
         required: true
         type: boolean
         default: false
+      enable_feature_z: # FengChi driver
+        description: "Enable FengChi driver (sched_ext)"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   build-batch-1: # Non Bazel Builds
