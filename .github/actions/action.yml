@@ -36,6 +36,11 @@ inputs:
     required: false
     type: string
     default: ""
+  enable_feature_z: # FengChi driver
+    description: "Enable FengChi driver (sched_ext)"
+    required: false
+    default: true
+    type: boolean
 
 runs:
     using: "composite"
@@ -499,7 +504,7 @@ runs:
           cp ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./manual_hooks.patch
           patch -p1 --fuzz=3 < ./manual_hooks.patch
           
-      - name: Apply Hide Stuff Patches
+      - name: Apply Hide Stuff Patches, Futile Maphide for jit-zygote-cache Detections
         shell: bash
         run: |
           echo "Changing to configuration directory: $CONFIG..."

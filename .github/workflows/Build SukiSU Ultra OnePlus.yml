@@ -577,23 +577,28 @@ jobs:
 
           echo "KSU_API_VERSION=$KSU_API_VERSION" >> $GITHUB_ENV
 
-          VERSION_DEFINITIONS=$(cat << 'EOF'
-          define get_ksu_version_full
-          v$1-CUSTOM_TAG@BRANCH_NAME
-          endef
+          GIT_HASH=$(git rev-parse --short HEAD)
+          echo "GIT_HASH=$GIT_HASH"
 
-          KSU_VERSION_API := KSU_API_VERSION
-          KSU_VERSION_FULL := vKSU_API_VERSION-CUSTOM_TAG@BRANCH_NAME
-          EOF
-          )
-          VERSION_DEFINITIONS=$(echo "$VERSION_DEFINITIONS" | sed \
-            -e "s/CUSTOM_TAG/$CUSTOM_TAG/g" \
-            -e "s/BRANCH_NAME/$BRANCH_NAME/g" \
-            -e "s/KSU_API_VERSION/$KSU_API_VERSION/g")
+          if [[ -z "$CUSTOM_TAG" || "$CUSTOM_TAG" == "$BRANCH_NAME" ]]; then
+            VERSION_FULL="v$KSU_API_VERSION-$GIT_HASH@$BRANCH_NAME"
+          else
+            VERSION_FULL="v$KSU_API_VERSION-$CUSTOM_TAG@$BRANCH_NAME[$GIT_HASH]"
+          fi
 
           sed -i '/define get_ksu_version_full/,/endef/d' kernel/Makefile
           sed -i '/KSU_VERSION_API :=/d' kernel/Makefile
           sed -i '/KSU_VERSION_FULL :=/d' kernel/Makefile
+
+          VERSION_DEFINITIONS=$(cat <<EOF
+            define get_ksu_version_full
+            $VERSION_FULL
+            endef
+
+            KSU_VERSION_API := $KSU_API_VERSION
+            KSU_VERSION_FULL := $VERSION_FULL
+          EOF
+          )
 
           awk -v def="$VERSION_DEFINITIONS" '
             /REPO_OWNER :=/ {print; print def; inserted=1; next}
@@ -604,7 +609,7 @@ jobs:
           KSU_VERSION=$(expr $(git rev-list --count main 2>/dev/null || echo 13000) + 10700)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
 
-          echo "::group:: 最终 Makefile 中版本信息及部分调试结果预览"
+          echo "::group::最终 Makefile 中版本信息及部分调试结果预览"
           grep -A10 "REPO_OWNER" kernel/Makefile
           grep "KSU_VERSION_FULL" kernel/Makefile
           echo "::endgroup::"
@@ -806,6 +811,8 @@ jobs:
         id: fast_build
         run: |
           KERNEL_VERSION="${{ env.KERNEL_VERSION }}"
+
+          # 判断内核版本并设置对应 clang 路径
           if [[ "$KERNEL_VERSION" == "6.6" ]]; then
             CLANG_PATH="clang-r510928"
             CLANG_DIR="prebuilts"
@@ -852,11 +859,21 @@ jobs:
             "HOSTLD=ld.lld"
             "KCFLAGS+=-Wno-error"
           )
+          # 如果是 5.10，添加 LLVM_IAS=1
           if [[ "$USE_LLVM_IAS" == "true" ]]; then
             MAKE_ARGS="LLVM_IAS=1 $MAKE_ARGS"
           fi
+
+          # 可选清理 ccache 缓存（不清理可注释）
+          # ccache -C
+
+          # 配置内核
           make -j$(nproc --all) O=out "${MAKE_ARGS[@]}" gki_defconfig
+
+          # 构建内核
           make -j$(nproc --all) O=out "${MAKE_ARGS[@]}"
+
+          # 显示 ccache 统计信息
           ccache -s
 
       - name: Fallback to Build Kernel
@@ -892,17 +909,22 @@ jobs:
               exit 1
             fi
           fi
+
+          # 复制 Image 到 AnyKernel3
           if [ -n "$image_path" ] && [ -f "$image_path" ]; then
             echo "Image file finally located at: $image_path"
             cp "$image_path" ./AnyKernel3/Image
             cp "$image_path" $PLATFORM/out/Final-Image-Find/Image
           fi
+
+          # 使用官方脚本编译的 sm8750，选择性复制其它镜像文件
           if [ -n "$dir2" ] && [ "${{ env.CPU }}" = "sm8750" ] && [ "${{ github.event.inputs.FAST_BUILD }}" = "false" ]; then
             echo "当前正在使用官方脚本构建 sm8750，需额外复制一些其它镜像文件：dtbo.img、system_dlkm.img、vendor_dlkm.img、vendor_boot.img。请注意，如果你在刷完官方脚本构建后想换成极速构建，请还原这些分区！"
             echo "You are currently building sm8750 with the official script. Additional image files will be copied: dtbo.img, system_dlkm.img, vendor_dlkm.img, vendor_boot.img. Please note: If you switch to fast build after flashing this build, make sure to restore these partitions!"
             for file in dtbo.img system_dlkm.erofs.img vendor_dlkm.img vendor_boot.img; do
               if [ -f "$dir2$file" ]; then
                 target_name="$file"
+                # 特殊处理 system_dlkm.erofs.img 的目标名
                 if [ "$file" = "system_dlkm.erofs.img" ]; then
                   target_name="system_dlkm.img"
                 fi
@@ -924,6 +946,7 @@ jobs:
           mv oImage Image
           cp Image $WORKSPACE/AnyKernel3/Image
 
+      # 下载 SUSFS 模块（CI）
       - name: Download Latest SUSFS Module from CI
         if: ${{ github.event.inputs.SUSFS_CI == 'CI' }}
         continue-on-error: true
@@ -931,11 +954,13 @@ jobs:
           LATEST_RUN_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/sidex15/susfs4ksu-module/actions/runs?status=success" | \
             jq -r '.workflow_runs[] | select(.head_branch == "v1.5.2+") | .id' | head -n 1)
+
           if [ -z "$LATEST_RUN_ID" ]; then
             echo "No successful run found for branch v1.5.2+"
           else
             ARTIFACT_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/sidex15/susfs4ksu-module/actions/runs/$LATEST_RUN_ID/artifacts" | jq -r '.artifacts[0].archive_download_url')
+
             if [ -n "$ARTIFACT_URL" ]; then
               curl -L -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o ksu_module_susfs_1.5.2+_CI.zip "$ARTIFACT_URL"
               cp ksu_module_susfs_1.5.2+_CI.zip ./AnyKernel3/
@@ -944,6 +969,7 @@ jobs:
             fi
           fi
 
+      # 下载 SUSFS 模块（Release）*
       - name: Download Latest SUSFS Module from Release
         if: ${{ github.event.inputs.SUSFS_CI == 'Release' }}
         continue-on-error: true
@@ -951,6 +977,7 @@ jobs:
           wget -O ksu_module_susfs_1.5.2+_Release.zip https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
           cp ksu_module_susfs_1.5.2+_Release.zip ./AnyKernel3/
 
+      # 解压 SukiSU Ultra（CI）（不自动安装）
       - name: Download Latest SukiSU-Ultra APK from CI
         continue-on-error: true
         env:
@@ -959,12 +986,14 @@ jobs:
           run_id=$(gh api \
             "repos/SukiSU-Ultra/SukiSU-Ultra/actions/workflows/build-manager.yml/runs?branch=main&status=success&per_page=1" \
             --jq '.workflow_runs[0].id' || echo "")
+
           if [[ -z "$run_id" ]]; then
             echo "No successful workflow run found. Skipping artifact download."
           else
             artifact_url=$(gh api \
               "repos/SukiSU-Ultra/SukiSU-Ultra/actions/runs/$run_id/artifacts" | \
               jq -r '.artifacts[] | select(.name == "manager") | .archive_download_url' | head -n1)
+
             if [[ -z "$artifact_url" ]]; then
               echo "No 'manager' artifact found in run $run_id. Skipping download."
             else
@@ -986,8 +1015,12 @@ jobs:
           cpu="${{ env.CPU }}"
           xml=".repo/manifests_fallback/${REPO_MANIFEST}.xml"
           cd $GITHUB_WORKSPACE
+          # 去掉末尾的 _x（只删一个）
           file_base=$(echo "$REPO_MANIFEST" | sed -E 's/_[a-z]$//')
+
+          # 提取 revision 并解析 Android 版本
           revision_full=$(grep -oP '<project[^>]*name="android_kernel[^"]*"[^>]*revision="\K[^"]+' "$xml" | head -n1 || true)
+
           if [ -n "$revision_full" ]; then
             android_ver=$(echo "$revision_full" | grep -oP '_v?_?\K([0-9]+\.[0-9]+(?:\.[0-9]+)?)' || true)
             if [ -n "$android_ver" ]; then
@@ -998,6 +1031,7 @@ jobs:
           else
             clean_file="${file_base}_AndroidUnknown"
           fi
+
           echo "value=$clean_file" >> "$GITHUB_OUTPUT"
 
       - name: Upload AnyKernel3
@@ -1015,8 +1049,11 @@ jobs:
           curl -s https://api.github.com/repos/FurLC/ZRAM-Module/releases/latest | \
             grep "browser_download_url" | grep "ZRAM-Module-.*\.zip" | cut -d '"' -f 4 | xargs wget -N
           unzip "$(ls -t ZRAM-Module-*.zip | head -1)" -d ZRAM-Module
+
           target="./ZRAM-Module/zram/zram.ko"
           echo "查找 zram.ko 模块文件..."
+
+          # 优先查找常见目录
           search_paths=(
             "$PLATFORM/out"
             "$WORKSPACE/device/qcom"
@@ -1026,9 +1063,12 @@ jobs:
             zram_path=$(find "$path" -type f -name "zram.ko" | head -n 1)
             [ -n "$zram_path" ] && break
           done
+
+          # 若以上未找到，广泛查找整个 workspace
           if [ -z "$zram_path" ]; then
             zram_path=$(find "$WORKSPACE" -type f -name "zram.ko" | head -n 1)
           fi
+
           if [ -n "$zram_path" ] && [ -f "$zram_path" ]; then
             echo " ZRAM module file finally located at: $zram_path "
             mkdir -p "$(dirname "$target")"
