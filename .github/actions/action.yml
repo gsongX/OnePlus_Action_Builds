@@ -338,31 +338,29 @@ runs:
             "v1.5.5"|"v1.5.6"|"v1.5.7")
               cp "../../../kernel_patches/next/0001-kernel-implement-susfs-v1.5.5-v1.5.7-KSUN-v1.0.8.patch" "./ksun_susfs_latest.patch"
               ;;
-            "v1.5.8"|"v1.5.9")
-              cp "../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" ./
-              patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch || true
-              #Hunk #1 FAILED at 314.
+            "v1.5.8")
+              cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+              patch -p1 --forward --fuzz=3 < 10_enable_susfs_for_ksu.patch  || true
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_apk_sign.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_apk_sign.c.patch
-              #Hunk #14 FAILED at 986.
-              #Hunk #18 FAILED at 1102.
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_core_hook.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_core_hook.c.patch
-              #Hunk #1 FAILED at 57.
-              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
-              patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
-              #Hunk #1 FAILED at 24
-              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_rules.c.patch" ./
-              patch -p1 --forward --fuzz=3 < fix_rules.c.patch
-              #Hunk #3 FAILED at 57.
               cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_selinux.c.patch" ./
               patch -p1 --forward --fuzz=3 < fix_selinux.c.patch
-              #Hunk #3 FAILED at 38.
-              #Hunk #4 FAILED at 73.
-              #Hunk #7 FAILED at 148.
-              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_sucompat.c.patch" ./
-              patch -p1 --forward --fuzz=3 < fix_sucompat.c.patch
-              patch -p1 --forward --fuzz=3 < ../../../patchs/next/remove_ksu_access_ok.patch
+              cp "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_ksud.c.patch" ./
+              patch -p1 --forward --fuzz=3 < fix_ksud.c.patch
+              ;;
+            "v1.5.9")
+              cp ../../../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+              patch -p1 --forward < 10_enable_susfs_for_ksu.patch  || true
+              
+              for file in $(find ./kernel -maxdepth 2 -name "*.rej" -printf "%f\n" | cut -d'.' -f1); do
+                  echo "Patching file: $file.c with fix_$file.c.patch"
+                  patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_$file.c.patch"
+              done
+              
+              # Fix build errors (no rejects; Still giving errors)
+              patch -p1 --forward < "../../../kernel_patches/next/susfs_fix_patches/$susfs_version/fix_kernel_compat.c.patch"
               ;;
             *)
               echo "Invalid version: $susfs_version"
@@ -402,7 +400,7 @@ runs:
           #   patch -p1 -F 3 < "../../../kernel_patches/oneplus/hmbird/hmbird_kernel_patch.patch"
           #   echo "Patching hmbird files!"
           #   cd ./kernel/sched
-          #   rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c hmbird_sched_proc.h hmbird_sched_proc_main.c
+          #   rm -rf ext.c ext.h build_policy.c slim.h slim_sysctl.c
           #   patch -p1 -F 3 < "../../../../../kernel_patches/oneplus/hmbird/hmbird_files_patch.patch"
           # else
           #   echo "Not OPAce5Pro / OP13 , skipping fengchi patch"
@@ -502,7 +500,7 @@ runs:
           cd "$CONFIG/kernel_platform/common"
           echo "Applying KSUN Hooks..."
           cp ../../../kernel_patches/next/scope_min_manual_hooks_v1.4.patch ./manual_hooks.patch
-          patch -p1 --fuzz=3 < ./manual_hooks.patch
+          patch -p1 < ./manual_hooks.patch
           
       - name: Apply Hide Stuff Patches, Futile Maphide for jit-zygote-cache Detections
         shell: bash
